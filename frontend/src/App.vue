@@ -757,7 +757,7 @@ onMounted(() => {
 
 .task-list {
   padding: 16px;
-  overflow: visible;
+  overflow-y: auto;
 }
 
 .empty-state {
@@ -1039,7 +1039,7 @@ onMounted(() => {
 
 /* Agent Process Panel */
 .agent-process-panel {
-  flex: 1;
+  flex: 1 0 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1400,7 +1400,7 @@ onMounted(() => {
 }
 
 .tool-content {
-  flex: 1;
+  flex: 1 0 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 20px;
