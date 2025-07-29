@@ -38,6 +38,7 @@ class Agent:
         self.max_steps = max_steps  # max ReAct steps, None means no limit
         self.conversation_history = []
         self.action_history = []
+        self.captured_actions = []  # Initialize captured actions list
         self.ext_data = ""
         self.output_mode = output_mode
         if tools:
@@ -139,10 +140,6 @@ Team description: {self.team_context.description}
         """
         final_answer = None
         current_step = 0
-
-        # Initialize captured actions list (if it doesn't exist)
-        if not hasattr(self, 'captured_actions'):
-            self.captured_actions = []
 
         # Initialize final answer (if it doesn't exist)
         if not hasattr(self, 'final_answer'):
@@ -277,7 +274,25 @@ Team description: {self.team_context.description}
                 tool: BaseTool = self._find_tool(parsed["action"])
                 observation = ""
                 if tool:
+                    # Record start time for execution timing
+                    start_time = time.time()
+
                     tool_result = tool.execute_tool(parsed.get("action_input", {}))
+
+                    # Calculate execution time
+                    execution_time = time.time() - start_time
+
+                    # Capture tool use for tracking
+                    self.capture_tool_use(
+                        tool_name=parsed["action"],
+                        input_params=parsed.get("action_input", {}),
+                        thought=parsed['thought'],
+                        output=tool_result.result,
+                        status=tool_result.status,
+                        error_message=tool_result.result if tool_result.status == "error" else None,
+                        execution_time=execution_time,
+                    )
+
                     # Update conversation history
                     parsed["Observation"] = {
                         "status": tool_result.status,
@@ -326,8 +341,24 @@ Team description: {self.team_context.description}
             # Set tool context
             tool.context = self
 
+            # Record start time for execution timing
+            start_time = time.time()
+
             # Execute tool (with empty parameters, tool will extract needed info from context)
             result = tool.execute({})
+
+            # Calculate execution time
+            execution_time = time.time() - start_time
+
+            # Capture tool use for tracking
+            self.capture_tool_use(
+                tool_name=tool.name,
+                input_params={},  # Post-process tools typically don't take parameters
+                output=result.result,
+                status=result.status,
+                error_message=str(result.result) if result.status == "error" else None,
+                execution_time=execution_time
+            )
 
             # Log result
             if result.status == "success":
@@ -424,10 +455,12 @@ Team description: {self.team_context.description}
                 f"member name: {agent_output.agent_name}\noutput content: {agent_output.output}\n\n")
         return "\n".join(agent_outputs_list)
 
-    def capture_tool_use(self, tool_name, input_params, output, status, error_message=None, execution_time=0.0):
+    def capture_tool_use(self, tool_name, input_params, output, status, thought=None, error_message=None,
+                         execution_time=0.0):
         """
         Capture a tool use action.
         
+        :param thought: thought content
         :param tool_name: Name of the tool used
         :param input_params: Parameters passed to the tool
         :param output: Output from the tool
@@ -448,51 +481,9 @@ Team description: {self.team_context.description}
             agent_id=self.id if hasattr(self, 'id') else str(id(self)),
             agent_name=self.name,
             action_type=AgentActionType.TOOL_USE,
-            tool_result=tool_result
+            tool_result=tool_result,
+            thought=thought
         )
-
-        if not hasattr(self, 'captured_actions'):
-            self.captured_actions = []
-
-        self.captured_actions.append(action)
-
-        return action
-
-    def capture_thinking(self, thought_content):
-        """
-        Capture a thinking action.
-        
-        :param thought_content: Content of the thought
-        """
-        action = AgentAction(
-            agent_id=self.id if hasattr(self, 'id') else str(id(self)),
-            agent_name=self.name,
-            action_type=AgentActionType.THINKING,
-            content=thought_content
-        )
-
-        if not hasattr(self, 'captured_actions'):
-            self.captured_actions = []
-
-        self.captured_actions.append(action)
-
-        return action
-
-    def capture_final_answer(self, answer_content):
-        """
-        Capture a final answer action.
-        
-        :param answer_content: Content of the final answer
-        """
-        action = AgentAction(
-            agent_id=self.id if hasattr(self, 'id') else str(id(self)),
-            agent_name=self.name,
-            action_type=AgentActionType.FINAL_ANSWER,
-            content=answer_content
-        )
-
-        if not hasattr(self, 'captured_actions'):
-            self.captured_actions = []
 
         self.captured_actions.append(action)
 

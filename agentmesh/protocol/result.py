@@ -55,6 +55,7 @@ class AgentAction:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     content: str = ""
     tool_result: Optional[ToolResult] = None
+    thought: Optional[str] = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -113,13 +114,14 @@ class AgentExecutionResult:
                     "agent_name": action.agent_name,
                     "action_type": action.action_type.value,
                     "content": action.content,
+                    "thought": action.thought,
                     "tool_result": {
                         "tool_name": action.tool_result.tool_name,
                         "input_params": action.tool_result.input_params,
                         "output": action.tool_result.output,
                         "status": action.tool_result.status,
                         "error_message": action.tool_result.error_message,
-                        "execution_time": action.tool_result.execution_time
+                        "execution_time": action.tool_result.execution_time,
                     } if action.tool_result else None,
                     "timestamp": action.timestamp
                 }
