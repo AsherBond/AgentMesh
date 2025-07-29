@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Dict, Any, Optional
 
-from agentmesh.protocal.task import Task, TaskStatus
+from agentmesh.protocol.task import Task, TaskStatus
 
 
 class AgentActionType(Enum):

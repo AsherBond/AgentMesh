@@ -6,10 +6,10 @@ from agentmesh.common import LoadingIndicator
 from agentmesh.common.utils import string_util
 from agentmesh.common.utils.log import logger
 from agentmesh.models import LLMRequest, LLMModel
-from agentmesh.protocal.agent import Agent
-from agentmesh.protocal.context import TeamContext
-from agentmesh.protocal.result import TeamResult, AgentExecutionResult
-from agentmesh.protocal.task import Task, TaskStatus
+from agentmesh.protocol.agent import Agent
+from agentmesh.protocol.context import TeamContext
+from agentmesh.protocol.result import TeamResult, AgentExecutionResult
+from agentmesh.protocol.task import Task, TaskStatus
 
 
 class AgentTeam:

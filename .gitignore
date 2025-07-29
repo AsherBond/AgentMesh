@@ -16,3 +16,5 @@ workspace/
 build/
 dist/
 node_modules/
+inner-docs/
+*.db

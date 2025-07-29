@@ -1,8 +1,9 @@
 import argparse
+import uvicorn
 
 from agentmesh.common import logger
 from agentmesh.common import load_config, config, ModelFactory
-from agentmesh.protocal import AgentTeam, Agent, Task
+from agentmesh.protocol import AgentTeam, Agent, Task
 from agentmesh.tools.tool_manager import ToolManager
 
 
@@ -101,6 +102,7 @@ def main():
     parser.add_argument("-t", "--team", help="Specify the team to run")
     parser.add_argument("-l", "--list", action="store_true", help="List available teams")
     parser.add_argument("-q", "--query", help="Direct query to run (non-interactive mode)")
+    parser.add_argument("-s", "--server", action="store_true", help="Start API server")
     args = parser.parse_args()
 
     # Load configuration
@@ -108,6 +110,24 @@ def main():
 
     # Load tools
     ToolManager().load_tools("agentmesh/tools")
+
+    # Start API server if requested
+    if args.server:
+        print("Starting AgentMesh API server...")
+        print("Server will be available at: http://localhost:8000")
+        print("API documentation: http://localhost:8000/docs")
+        print("Press Ctrl+C to stop the server")
+        try:
+            uvicorn.run(
+                "agentmesh.api.app:app",
+                host="0.0.0.0",
+                port=8000,
+                reload=True,
+                log_level="info"
+            )
+        except KeyboardInterrupt:
+            print("\nServer stopped.")
+        return
 
     # List teams if requested
     if args.list:

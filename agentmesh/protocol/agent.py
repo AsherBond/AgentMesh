@@ -6,8 +6,8 @@ from agentmesh.common.utils import string_util
 from agentmesh.common.utils.log import logger
 from agentmesh.common.utils.xml_util import XmlResParser
 from agentmesh.models import LLMRequest, LLMModel
-from agentmesh.protocal.context import TeamContext, AgentOutput
-from agentmesh.protocal.result import AgentAction, AgentActionType, ToolResult, AgentResult
+from agentmesh.protocol.context import TeamContext, AgentOutput
+from agentmesh.protocol.result import AgentAction, AgentActionType, ToolResult, AgentResult
 from agentmesh.tools.base_tool import BaseTool
 from agentmesh.tools.base_tool import ToolStage
 

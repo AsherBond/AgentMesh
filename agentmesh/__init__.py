@@ -10,9 +10,9 @@ logging.getLogger("browser_use").setLevel(logging.ERROR)
 logging.getLogger("root").setLevel(logging.ERROR)
 
 # Now import the rest
-from agentmesh.protocal import Agent, AgentTeam
-from agentmesh.protocal.task import Task
-from agentmesh.protocal.result import TeamResult
+from agentmesh.protocol import Agent, AgentTeam
+from agentmesh.protocol.task import Task
+from agentmesh.protocol.result import TeamResult
 from agentmesh.models import LLMModel
 from agentmesh.common.utils.log import setup_logging
 
