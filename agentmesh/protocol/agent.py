@@ -6,6 +6,7 @@ from agentmesh.common.utils import string_util
 from agentmesh.common.utils.log import logger
 from agentmesh.common.utils.xml_util import XmlResParser
 from agentmesh.models import LLMRequest, LLMModel
+from agentmesh.protocol.agent_stream import AgentStreamExecutor
 from agentmesh.protocol.context import TeamContext, AgentOutput
 from agentmesh.protocol.result import AgentAction, AgentActionType, ToolResult, AgentResult
 from agentmesh.tools.base_tool import BaseTool
@@ -488,6 +489,48 @@ Team description: {self.team_context.description}
         self.captured_actions.append(action)
 
         return action
+
+    def run_stream(self, user_message: str, on_event=None) -> str:
+        """
+        Execute single agent task with streaming (based on tool-call)
+
+        This is a new method for single agent mode, supporting:
+        - Streaming output
+        - Multi-turn reasoning based on tool-call
+        - Event callbacks
+
+        Args:
+            user_message: User message
+            on_event: Event callback function callback(event: dict)
+                     event = {"type": str, "timestamp": float, "data": dict}
+
+        Returns:
+            Final response text
+
+        Example:
+            def print_event(event):
+                if event["type"] == "message_update":
+                    print(event["data"]["delta"], end="", flush=True)
+
+            response = agent.run_stream("Hello", on_event=print_event)
+        """
+        # Get model to use
+        model_to_use = self.model if self.model else self.team_context.model if self.team_context else None
+        if not model_to_use:
+            raise ValueError("No model available for agent")
+
+        # Create stream executor
+        executor = AgentStreamExecutor(
+            agent=self,
+            model=model_to_use,
+            system_prompt=self.system_prompt,
+            tools=self.tools,
+            max_turns=self.max_steps if self.max_steps else 10,
+            on_event=on_event
+        )
+
+        # Execute
+        return executor.run_stream(user_message)
 
 
 AGENT_REPLY_PROMPT = """You are part of the team, you only need to reply the part of user question related to your responsibilities

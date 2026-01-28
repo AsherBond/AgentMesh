@@ -1,7 +1,9 @@
-from agentmesh.models.llm.base_model import LLMModel, LLMRequest, LLMResponse
-from agentmesh.common.enums import ModelApiBase
-import requests
 import json
+
+import requests
+
+from agentmesh.common.enums import ModelApiBase
+from agentmesh.models.llm.base_model import LLMModel, LLMRequest, LLMResponse
 
 
 class ClaudeModel(LLMModel):
@@ -44,6 +46,10 @@ class ClaudeModel(LLMModel):
         if system_prompt:
             data["system"] = system_prompt
 
+        # Add tools if present in request
+        if hasattr(request, 'tools') and request.tools:
+            data["tools"] = request.tools
+
         try:
             response = requests.post(
                 f"{self.api_base}/messages",
@@ -55,6 +61,32 @@ class ClaudeModel(LLMModel):
             if response.status_code == 200:
                 claude_response = response.json()
 
+                # Extract content blocks
+                content_blocks = claude_response.get("content", [])
+                text_content = ""
+                tool_calls = []
+
+                for block in content_blocks:
+                    if block.get("type") == "text":
+                        text_content = block.get("text", "")
+                    elif block.get("type") == "tool_use":
+                        tool_calls.append({
+                            "id": block.get("id", ""),
+                            "type": "function",
+                            "function": {
+                                "name": block.get("name", ""),
+                                "arguments": json.dumps(block.get("input", {}))
+                            }
+                        })
+
+                # Build message
+                message = {
+                    "role": "assistant",
+                    "content": text_content
+                }
+                if tool_calls:
+                    message["tool_calls"] = tool_calls
+
                 # Format the response to match OpenAI's structure
                 openai_format_response = {
                     "id": claude_response.get("id", ""),
@@ -64,10 +96,7 @@ class ClaudeModel(LLMModel):
                     "choices": [
                         {
                             "index": 0,
-                            "message": {
-                                "role": "assistant",
-                                "content": claude_response.get("content", [{}])[0].get("text", "")
-                            },
+                            "message": message,
                             "finish_reason": claude_response.get("stop_reason", "stop")
                         }
                     ],
@@ -154,9 +183,21 @@ class ClaudeModel(LLMModel):
         if system_prompt:
             data["system"] = system_prompt
 
+        # Add tools if present in request
+        if hasattr(request, 'tools') and request.tools:
+            data["tools"] = request.tools
+            print(f"[DEBUG] Sending tools to Claude: {len(request.tools)} tools")
+            for tool in request.tools:
+                print(f"  - {tool['name']}")
+
         # Add response format if JSON is requested
         if request.json_format:
             data["response_format"] = {"type": "json_object"}
+
+        # Debug: print request
+        print(f"[DEBUG] Claude API request to: {self.api_base}/messages")
+        print(f"[DEBUG] Model: {self.model}")
+        print(f"[DEBUG] Messages: {len(claude_messages)} messages")
 
         try:
             response = requests.post(
@@ -166,11 +207,16 @@ class ClaudeModel(LLMModel):
                 stream=True
             )
 
+            print(f"[DEBUG] Response status: {response.status_code}")
+
             # Check for error response
             if response.status_code != 200:
                 # Try to extract error message
+                error_text = response.text
+                print(f"[DEBUG] Error response text: {error_text}")
+
                 try:
-                    error_data = json.loads(response.text)
+                    error_data = json.loads(error_text)
                     if "error" in error_data:
                         if isinstance(error_data["error"], dict) and "message" in error_data["error"]:
                             error_msg = error_data["error"]["message"]
@@ -179,9 +225,11 @@ class ClaudeModel(LLMModel):
                     elif "message" in error_data:
                         error_msg = error_data["message"]
                     else:
-                        error_msg = response.text
+                        error_msg = error_text
                 except:
-                    error_msg = response.text or "Unknown error"
+                    error_msg = error_text or "Unknown error"
+
+                print(f"[DEBUG] Parsed error message: {error_msg}")
 
                 # Yield an error object that can be detected by the caller
                 yield {
@@ -191,6 +239,10 @@ class ClaudeModel(LLMModel):
                 }
                 return
 
+            # Track tool use state
+            current_tool_use_index = -1
+            tool_uses_map = {}  # {index: {id, name, input}}
+
             for line in response.iter_lines():
                 if line:
                     line = line.decode('utf-8')
@@ -199,28 +251,72 @@ class ClaudeModel(LLMModel):
                         if line == '[DONE]':
                             break
                         try:
-                            chunk = json.loads(line)
-                            # Extract content from the delta
-                            content = ""
-                            if "delta" in chunk and "text" in chunk["delta"]:
-                                content = chunk["delta"]["text"]
+                            event = json.loads(line)
+                            event_type = event.get("type")
 
-                            # Convert Claude streaming format to OpenAI format
-                            yield {
-                                "id": chunk.get("id", ""),
-                                "object": "chat.completion.chunk",
-                                "created": int(chunk.get("created_at", 0)),
-                                "model": self.model,
-                                "choices": [
-                                    {
-                                        "index": 0,
-                                        "delta": {
-                                            "content": content
-                                        },
-                                        "finish_reason": None
+                            # Handle different event types
+                            if event_type == "content_block_start":
+                                # New content block
+                                block = event.get("content_block", {})
+                                if block.get("type") == "tool_use":
+                                    current_tool_use_index = event.get("index", 0)
+                                    tool_uses_map[current_tool_use_index] = {
+                                        "id": block.get("id", ""),
+                                        "name": block.get("name", ""),
+                                        "input": ""
                                     }
-                                ]
-                            }
+
+                            elif event_type == "content_block_delta":
+                                delta = event.get("delta", {})
+                                delta_type = delta.get("type")
+
+                                if delta_type == "text_delta":
+                                    # Text content
+                                    content = delta.get("text", "")
+                                    yield {
+                                        "id": event.get("id", ""),
+                                        "object": "chat.completion.chunk",
+                                        "created": 0,
+                                        "model": self.model,
+                                        "choices": [{
+                                            "index": 0,
+                                            "delta": {"content": content},
+                                            "finish_reason": None
+                                        }]
+                                    }
+
+                                elif delta_type == "input_json_delta":
+                                    # Tool input accumulation
+                                    if current_tool_use_index >= 0:
+                                        tool_uses_map[current_tool_use_index]["input"] += delta.get("partial_json", "")
+
+                            elif event_type == "message_delta":
+                                # Message complete - yield tool calls if any
+                                if tool_uses_map:
+                                    for idx in sorted(tool_uses_map.keys()):
+                                        tool_data = tool_uses_map[idx]
+                                        yield {
+                                            "id": event.get("id", ""),
+                                            "object": "chat.completion.chunk",
+                                            "created": 0,
+                                            "model": self.model,
+                                            "choices": [{
+                                                "index": 0,
+                                                "delta": {
+                                                    "tool_calls": [{
+                                                        "index": idx,
+                                                        "id": tool_data["id"],
+                                                        "type": "function",
+                                                        "function": {
+                                                            "name": tool_data["name"],
+                                                            "arguments": tool_data["input"]
+                                                        }
+                                                    }]
+                                                },
+                                                "finish_reason": None
+                                            }]
+                                        }
+
                         except json.JSONDecodeError:
                             continue
         except requests.RequestException as e:

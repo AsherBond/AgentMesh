@@ -12,7 +12,7 @@ class LLMRequest:
     """
 
     def __init__(self, messages: list,
-                 temperature=0.5, json_format=False, stream=False):
+                 temperature=0.5, json_format=False, stream=False, tools=None):
         """
         Initialize the BaseRequest with the necessary fields.
 
@@ -20,11 +20,13 @@ class LLMRequest:
         :param temperature: The sampling temperature for the model.
         :param json_format: Whether to request JSON formatted response.
         :param stream: Whether to enable streaming for the response.
+        :param tools: List of tools for function calling (OpenAI format).
         """
         self.messages = messages
         self.temperature = temperature
         self.json_format = json_format
         self.stream = stream
+        self.tools = tools
 
 
 class LLMResponse:

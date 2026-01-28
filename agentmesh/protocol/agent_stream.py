@@ -1,0 +1,347 @@
+"""
+Agent Stream Execution Module - Multi-turn reasoning based on tool-call
+
+Provides streaming output, event system, and complete tool-call loop
+"""
+import json
+import time
+from typing import List, Dict, Any, Optional, Callable
+from agentmesh.models import LLMRequest, LLMModel
+from agentmesh.tools.base_tool import BaseTool, ToolResult
+from agentmesh.common.utils.log import logger
+
+
+class AgentStreamExecutor:
+    """
+    Agent Stream Executor
+    
+    Handles multi-turn reasoning loop based on tool-call:
+    1. LLM generates response (may include tool calls)
+    2. Execute tools
+    3. Return results to LLM
+    4. Repeat until no more tool calls
+    """
+    
+    def __init__(
+        self,
+        agent,  # Agent instance
+        model: LLMModel,
+        system_prompt: str,
+        tools: List[BaseTool],
+        max_turns: int = 10,
+        on_event: Optional[Callable] = None
+    ):
+        """
+        Initialize stream executor
+        
+        Args:
+            agent: Agent instance (for accessing context)
+            model: LLM model
+            system_prompt: System prompt
+            tools: List of available tools
+            max_turns: Maximum number of turns
+            on_event: Event callback function
+        """
+        self.agent = agent
+        self.model = model
+        self.system_prompt = system_prompt
+        # Convert tools list to dict
+        self.tools = {tool.name: tool for tool in tools} if isinstance(tools, list) else tools
+        self.max_turns = max_turns
+        self.on_event = on_event
+        
+        # Message history
+        self.messages = []
+    
+    def _emit_event(self, event_type: str, data: dict = None):
+        """Emit event"""
+        if self.on_event:
+            try:
+                self.on_event({
+                    "type": event_type,
+                    "timestamp": time.time(),
+                    "data": data or {}
+                })
+            except Exception as e:
+                logger.error(f"Event callback error: {e}")
+    
+    def run_stream(self, user_message: str) -> str:
+        """
+        Execute streaming reasoning loop
+        
+        Args:
+            user_message: User message
+            
+        Returns:
+            Final response text
+        """
+        # Debug: log available tools
+        logger.info(f"Available tools: {list(self.tools.keys())}")
+        
+        # Add user message
+        self.messages.append({
+            "role": "user",
+            "content": user_message
+        })
+        
+        self._emit_event("agent_start")
+        
+        final_response = ""
+        turn = 0
+        
+        try:
+            while turn < self.max_turns:
+                turn += 1
+                self._emit_event("turn_start", {"turn": turn})
+                
+                # Call LLM
+                assistant_msg, tool_calls = self._call_llm_stream()
+                final_response = assistant_msg
+                
+                # No tool calls, end loop
+                if not tool_calls:
+                    self._emit_event("turn_end", {
+                        "turn": turn,
+                        "has_tool_calls": False
+                    })
+                    break
+                
+                # Execute tools
+                tool_results = []
+                tool_result_blocks = []
+                
+                for tool_call in tool_calls:
+                    result = self._execute_tool(tool_call)
+                    tool_results.append(result)
+                    
+                    # Build tool result block (Claude format)
+                    tool_result_blocks.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_call["id"],
+                        "content": json.dumps(result)
+                    })
+                
+                # Add tool results to message history as user message (Claude format)
+                self.messages.append({
+                    "role": "user",
+                    "content": tool_result_blocks
+                })
+                
+                self._emit_event("turn_end", {
+                    "turn": turn,
+                    "has_tool_calls": True,
+                    "tool_count": len(tool_calls)
+                })
+            
+            if turn >= self.max_turns:
+                logger.warning(f"Reached max turns: {self.max_turns}")
+        
+        except Exception as e:
+            logger.error(f"Agent execution error: {e}")
+            self._emit_event("error", {"error": str(e)})
+            raise
+        
+        finally:
+            self._emit_event("agent_end", {"final_response": final_response})
+        
+        return final_response
+    
+    def _call_llm_stream(self) -> tuple[str, List[Dict]]:
+        """
+        Call LLM with streaming
+        
+        Returns:
+            (response_text, tool_calls)
+        """
+        # Prepare messages
+        messages = self._prepare_messages()
+        
+        # Prepare tool definitions (OpenAI/Claude format)
+        tools_schema = None
+        if self.tools:
+            tools_schema = []
+            for tool in self.tools.values():
+                tools_schema.append({
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.params  # Claude uses input_schema
+                })
+            
+            # Debug: log tools sent to LLM
+            logger.info(f"Sending {len(tools_schema)} tools to LLM: {[t['name'] for t in tools_schema]}")
+        
+        # Create request
+        request = LLMRequest(
+            messages=messages,
+            temperature=0,
+            stream=True,
+            tools=tools_schema
+        )
+        
+        self._emit_event("message_start", {"role": "assistant"})
+        
+        # Streaming response
+        full_content = ""
+        tool_calls_buffer = {}  # {index: {id, name, arguments}}
+        
+        try:
+            stream = self.model.call_stream(request)
+            
+            for chunk in stream:
+                # Check for errors
+                if isinstance(chunk, dict) and chunk.get("error"):
+                    error_msg = chunk.get("message", "Unknown error")
+                    status_code = chunk.get("status_code", "N/A")
+                    logger.error(f"API Error: {error_msg} (Status: {status_code})")
+                    logger.error(f"Full error chunk: {chunk}")
+                    raise Exception(f"{error_msg} (Status: {status_code})")
+                
+                # Parse chunk
+                if isinstance(chunk, dict) and "choices" in chunk:
+                    choice = chunk["choices"][0]
+                    delta = choice.get("delta", {})
+                    
+                    # Handle text content
+                    if "content" in delta and delta["content"]:
+                        content_delta = delta["content"]
+                        full_content += content_delta
+                        self._emit_event("message_update", {"delta": content_delta})
+                    
+                    # Handle tool calls
+                    if "tool_calls" in delta:
+                        for tc_delta in delta["tool_calls"]:
+                            index = tc_delta.get("index", 0)
+                            
+                            if index not in tool_calls_buffer:
+                                tool_calls_buffer[index] = {
+                                    "id": "",
+                                    "name": "",
+                                    "arguments": ""
+                                }
+                            
+                            if "id" in tc_delta:
+                                tool_calls_buffer[index]["id"] = tc_delta["id"]
+                            
+                            if "function" in tc_delta:
+                                func = tc_delta["function"]
+                                if "name" in func:
+                                    tool_calls_buffer[index]["name"] = func["name"]
+                                if "arguments" in func:
+                                    tool_calls_buffer[index]["arguments"] += func["arguments"]
+        
+        except Exception as e:
+            logger.error(f"LLM call error: {e}")
+            raise
+        
+        # Parse tool calls
+        tool_calls = []
+        for idx in sorted(tool_calls_buffer.keys()):
+            tc = tool_calls_buffer[idx]
+            try:
+                arguments = json.loads(tc["arguments"]) if tc["arguments"] else {}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse tool arguments: {tc['arguments']}")
+                arguments = {}
+            
+            tool_calls.append({
+                "id": tc["id"],
+                "name": tc["name"],
+                "arguments": arguments
+            })
+        
+        # Add assistant message to history (Claude format uses content blocks)
+        assistant_msg = {"role": "assistant", "content": []}
+        
+        # Add text content block if present
+        if full_content:
+            assistant_msg["content"].append({
+                "type": "text",
+                "text": full_content
+            })
+        
+        # Add tool_use blocks if present
+        if tool_calls:
+            for tc in tool_calls:
+                assistant_msg["content"].append({
+                    "type": "tool_use",
+                    "id": tc["id"],
+                    "name": tc["name"],
+                    "input": tc["arguments"]
+                })
+        
+        self.messages.append(assistant_msg)
+        
+        self._emit_event("message_end", {
+            "content": full_content,
+            "tool_calls": tool_calls
+        })
+        
+        return full_content, tool_calls
+    
+    def _execute_tool(self, tool_call: Dict) -> Dict[str, Any]:
+        """
+        Execute tool
+        
+        Args:
+            tool_call: {"id": str, "name": str, "arguments": dict}
+            
+        Returns:
+            Tool execution result
+        """
+        tool_name = tool_call["name"]
+        tool_id = tool_call["id"]
+        arguments = tool_call["arguments"]
+        
+        self._emit_event("tool_execution_start", {
+            "tool_call_id": tool_id,
+            "tool_name": tool_name,
+            "arguments": arguments
+        })
+        
+        try:
+            tool = self.tools.get(tool_name)
+            if not tool:
+                raise ValueError(f"Tool '{tool_name}' not found")
+            
+            # Set tool context
+            tool.model = self.model
+            tool.context = self.agent
+            
+            # Execute tool
+            start_time = time.time()
+            result: ToolResult = tool.execute_tool(arguments)
+            execution_time = time.time() - start_time
+            
+            result_dict = {
+                "status": result.status,
+                "result": result.result,
+                "execution_time": execution_time
+            }
+            
+            self._emit_event("tool_execution_end", {
+                "tool_call_id": tool_id,
+                "tool_name": tool_name,
+                **result_dict
+            })
+            
+            return result_dict
+        
+        except Exception as e:
+            logger.error(f"Tool execution error: {e}")
+            error_result = {
+                "status": "error",
+                "result": str(e),
+                "execution_time": 0
+            }
+            self._emit_event("tool_execution_end", {
+                "tool_call_id": tool_id,
+                "tool_name": tool_name,
+                **error_result
+            })
+            return error_result
+    
+    def _prepare_messages(self) -> List[Dict[str, Any]]:
+        """Prepare messages to send to LLM"""
+        messages = [{"role": "system", "content": self.system_prompt}]
+        messages.extend(self.messages)
+        return messages
