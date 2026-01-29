@@ -9,6 +9,19 @@ from agentmesh.tools.current_time.current_time import CurrentTime
 from agentmesh.tools.file_save.file_save import FileSave
 from agentmesh.tools.terminal.terminal import Terminal
 
+# Import new file operation tools
+from agentmesh.tools.read.read import Read
+from agentmesh.tools.write.write import Write
+from agentmesh.tools.edit.edit import Edit
+from agentmesh.tools.bash.bash import Bash
+from agentmesh.tools.grep.grep import Grep
+from agentmesh.tools.find.find import Find
+from agentmesh.tools.ls.ls import Ls
+
+# Import memory tools
+from agentmesh.tools.memory.memory_search import MemorySearchTool
+from agentmesh.tools.memory.memory_get import MemoryGetTool
+
 
 # Delayed import for BrowserTool
 def _import_browser_tool():
@@ -40,7 +53,18 @@ __all__ = [
     'CurrentTime',
     'FileSave',
     'BrowserTool',
-    'Terminal'
+    'Terminal',
+    # New file operation tools
+    'Read',
+    'Write',
+    'Edit',
+    'Bash',
+    'Grep',
+    'Find',
+    'Ls',
+    # Memory tools
+    'MemorySearchTool',
+    'MemoryGetTool'
 ]
 
 """
