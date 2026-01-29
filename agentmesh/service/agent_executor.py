@@ -49,7 +49,7 @@ class AgentExecutor:
         team_model = self.model_factory.get_model(team_model_name)
 
         # Get team's max_steps
-        team_max_steps = team_config.get("max_steps", 20)
+        team_max_steps = team_config.get("max_steps", 100)
 
         # Create team with the model
         team = AgentTeam(

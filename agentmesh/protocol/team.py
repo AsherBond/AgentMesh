@@ -13,7 +13,7 @@ from agentmesh.protocol.task import Task, TaskStatus
 
 
 class AgentTeam:
-    def __init__(self, name: str, description: str, rule: str = "", model: LLMModel = None, max_steps: int = 20):
+    def __init__(self, name: str, description: str, rule: str = "", model: LLMModel = None, max_steps: int = 100):
         """
         Initialize the AgentTeam with a name, description, rules, and a list of agents.
 
@@ -21,7 +21,7 @@ class AgentTeam:
         :param description: A description of the agent group.
         :param rule: The rules governing the agent group.
         :param model: An instance of LLMModel to be used by the team.
-        :param max_steps: Maximum number of total steps across all agents (default: 20)
+        :param max_steps: Maximum number of total steps across all agents (default: 100)
         """
         self.name = name
         self.description = description

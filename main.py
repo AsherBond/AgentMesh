@@ -29,8 +29,8 @@ def create_team_from_config(team_name):
     team_model_name = team_config.get("model", "gpt-4o")
     team_model = model_factory.get_model(team_model_name)
 
-    # Get team's max_steps (default to 20 if not specified)
-    team_max_steps = team_config.get("max_steps", 20)
+    # Get team's max_steps (default to 100 if not specified)
+    team_max_steps = team_config.get("max_steps", 100)
 
     # Create team with the model
     team = AgentTeam(

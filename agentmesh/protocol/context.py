@@ -1,5 +1,5 @@
 class TeamContext:
-    def __init__(self, name: str, description: str, rule: str, agents: list, max_steps: int = 20):
+    def __init__(self, name: str, description: str, rule: str, agents: list, max_steps: int = 100):
         """
         Initialize the TeamContext with a name, description, rules, a list of agents, and a user question.
         :param name: The name of the group context.

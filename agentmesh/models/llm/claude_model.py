@@ -186,18 +186,10 @@ class ClaudeModel(LLMModel):
         # Add tools if present in request
         if hasattr(request, 'tools') and request.tools:
             data["tools"] = request.tools
-            print(f"[DEBUG] Sending tools to Claude: {len(request.tools)} tools")
-            for tool in request.tools:
-                print(f"  - {tool['name']}")
 
         # Add response format if JSON is requested
         if request.json_format:
             data["response_format"] = {"type": "json_object"}
-
-        # Debug: print request
-        print(f"[DEBUG] Claude API request to: {self.api_base}/messages")
-        print(f"[DEBUG] Model: {self.model}")
-        print(f"[DEBUG] Messages: {len(claude_messages)} messages")
 
         try:
             response = requests.post(
@@ -206,8 +198,6 @@ class ClaudeModel(LLMModel):
                 json=data,
                 stream=True
             )
-
-            print(f"[DEBUG] Response status: {response.status_code}")
 
             # Check for error response
             if response.status_code != 200:
@@ -335,7 +325,16 @@ class ClaudeModel(LLMModel):
             }
 
     def _get_max_tokens(self) -> int:
+        """
+        Get max_tokens for the model.
+        Reference from pi-mono:
+        - Claude 3.5/3.7: 8192
+        - Claude 3 Opus: 4096
+        - Default: 4096
+        """
         model = self.model
         if model and (model.startswith("claude-3-5") or model.startswith("claude-3-7")):
             return 8192
+        elif model and model.startswith("claude-3") and "opus" in model:
+            return 4096
         return 4096
