@@ -13,7 +13,8 @@ from agentmesh.tools.base_tool import ToolStage
 
 class Agent:
     def __init__(self, name: str, system_prompt: str, description: str, model: LLMModel = None, team_context=None,
-                 tools=None, output_mode="print", max_steps=100, max_context_tokens=None, context_reserve_tokens=None):
+                 tools=None, output_mode="print", max_steps=100, max_context_tokens=None, context_reserve_tokens=None,
+                 memory_manager=None):
         """
         Initialize the Agent with a name, system prompt, model, description, and optional group context.
 
@@ -28,6 +29,7 @@ class Agent:
         :param max_steps: Maximum number of steps the agent can take (default: 100)
         :param max_context_tokens: Maximum tokens to keep in context (default: None, auto-calculated based on model)
         :param context_reserve_tokens: Reserve tokens for new requests (default: None, auto-calculated)
+        :param memory_manager: Optional MemoryManager instance for memory operations
         """
         self.name = name
         self.system_prompt = system_prompt
@@ -46,6 +48,7 @@ class Agent:
         self.output_mode = output_mode
         self.last_usage = None  # Store last API response usage info
         self.messages = []  # Unified message history for stream mode
+        self.memory_manager = memory_manager  # Memory manager for auto memory flush
         if tools:
             for tool in tools:
                 self.add_tool(tool)

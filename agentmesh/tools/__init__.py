@@ -18,6 +18,10 @@ from agentmesh.tools.grep.grep import Grep
 from agentmesh.tools.find.find import Find
 from agentmesh.tools.ls.ls import Ls
 
+# Import memory tools
+from agentmesh.tools.memory.memory_search import MemorySearchTool
+from agentmesh.tools.memory.memory_get import MemoryGetTool
+
 
 # Delayed import for BrowserTool
 def _import_browser_tool():
@@ -57,7 +61,10 @@ __all__ = [
     'Bash',
     'Grep',
     'Find',
-    'Ls'
+    'Ls',
+    # Memory tools
+    'MemorySearchTool',
+    'MemoryGetTool'
 ]
 
 """
