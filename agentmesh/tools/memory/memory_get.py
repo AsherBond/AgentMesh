@@ -4,18 +4,20 @@ Memory get tool
 Allows agents to read specific sections from memory files
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from pathlib import Path
 from agentmesh.tools.base_tool import BaseTool
+from agentmesh.memory.manager import MemoryManager
 
 
 class MemoryGetTool(BaseTool):
     """Tool for reading memory file contents"""
     
+    # Use class attributes instead of instance attributes
     name: str = "memory_get"
     description: str = (
-        "Read specific content from memory files. "
-        "Use this to get full context from a memory file or specific line range."
+        "Read specific memory file content by path and line range. "
+        "Use after memory_search to get full context from historical memory files."
     )
     params: dict = {
         "type": "object",
@@ -37,43 +39,44 @@ class MemoryGetTool(BaseTool):
         "required": ["path"]
     }
     
-    def __init__(self, memory_manager):
+    def __init__(self, memory_manager: Optional[MemoryManager] = None):
         """
         Initialize memory get tool
         
         Args:
-            memory_manager: MemoryManager instance
+            memory_manager: MemoryManager instance (optional, required for actual execution)
         """
         super().__init__()
         self.memory_manager = memory_manager
     
-    def execute(self, args: dict):
+    async def execute(self, **kwargs) -> str:
         """
         Execute memory file read
         
         Args:
-            args: Dictionary with path, start_line, num_lines
+            path: File path
+            start_line: Start line
+            num_lines: Number of lines
             
         Returns:
-            ToolResult with file content
+            File content
         """
-        from agentmesh.tools.base_tool import ToolResult
+        if self.memory_manager is None:
+            return "Error: Memory manager not configured. This tool requires a MemoryManager instance."
         
-        path = args.get("path")
-        start_line = args.get("start_line", 1)
-        num_lines = args.get("num_lines")
+        path = kwargs.get("path")
+        start_line = kwargs.get("start_line", 1)
+        num_lines = kwargs.get("num_lines")
         
         if not path:
-            return ToolResult.fail("Error: path parameter is required")
+            return "Error: path parameter is required"
         
         try:
-            workspace_dir = self.memory_manager.config.get_agent_workspace(
-                self.memory_manager.agent_id
-            )
+            workspace_dir = self.memory_manager.config.get_workspace()
             file_path = workspace_dir / path
             
             if not file_path.exists():
-                return ToolResult.fail(f"Error: File not found: {path}")
+                return f"Error: File not found: {path}"
             
             content = file_path.read_text()
             lines = content.split('\n')
@@ -103,7 +106,7 @@ class MemoryGetTool(BaseTool):
                 result
             ]
             
-            return ToolResult.success('\n'.join(output))
+            return '\n'.join(output)
             
         except Exception as e:
-            return ToolResult.fail(f"Error reading memory file: {str(e)}")
+            return f"Error reading memory file: {str(e)}"
