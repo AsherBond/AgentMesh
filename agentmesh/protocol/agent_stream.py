@@ -373,6 +373,12 @@ class AgentStreamExecutor:
         # Get context window and reserve tokens from agent
         context_window = self.agent._get_model_context_window()
         reserve_tokens = self.agent._get_context_reserve_tokens()
+        
+        # Safety check: ensure we have valid values
+        if context_window is None or reserve_tokens is None:
+            logger.warning("Cannot trim messages: context_window or reserve_tokens is None")
+            return
+        
         max_tokens = context_window - reserve_tokens
 
         # Estimate current tokens
