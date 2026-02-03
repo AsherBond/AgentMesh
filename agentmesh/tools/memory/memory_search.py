@@ -6,15 +6,18 @@ Allows agents to search their memory using semantic and keyword search
 
 from typing import Dict, Any, Optional
 from agentmesh.tools.base_tool import BaseTool
+from agentmesh.memory.manager import MemoryManager
 
 
 class MemorySearchTool(BaseTool):
     """Tool for searching agent memory"""
     
+    # Use class attributes instead of instance attributes
     name: str = "memory_search"
     description: str = (
-        "Search agent's long-term memory using semantic and keyword search. "
-        "Use this to recall past conversations, preferences, and knowledge."
+        "Search historical memory files (beyond today/yesterday) using semantic and keyword search. "
+        "Recent context (MEMORY.md + today + yesterday) is already loaded. "
+        "Use this ONLY for older dates, specific past events, or when current context lacks needed info."
     )
     params: dict = {
         "type": "object",
@@ -37,50 +40,51 @@ class MemorySearchTool(BaseTool):
         "required": ["query"]
     }
     
-    def __init__(self, memory_manager, user_id: Optional[str] = None):
+    def __init__(self, memory_manager: Optional[MemoryManager] = None, user_id: Optional[str] = None):
         """
         Initialize memory search tool
         
         Args:
-            memory_manager: MemoryManager instance
+            memory_manager: MemoryManager instance (optional, required for actual execution)
             user_id: Optional user ID for scoped search
         """
         super().__init__()
         self.memory_manager = memory_manager
         self.user_id = user_id
     
-    def execute(self, args: dict):
+    async def execute(self, **kwargs) -> str:
         """
         Execute memory search
         
         Args:
-            args: Dictionary with query, max_results, min_score
+            query: Search query
+            max_results: Maximum results
+            min_score: Minimum score
             
         Returns:
-            ToolResult with formatted search results
+            Formatted search results
         """
-        from agentmesh.tools.base_tool import ToolResult
-        import asyncio
+        if self.memory_manager is None:
+            return "Error: Memory manager not configured. This tool requires a MemoryManager instance."
         
-        query = args.get("query")
-        max_results = args.get("max_results", 10)
-        min_score = args.get("min_score", 0.3)
+        query = kwargs.get("query")
+        max_results = kwargs.get("max_results", 10)
+        min_score = kwargs.get("min_score", 0.3)
         
         if not query:
-            return ToolResult.fail("Error: query parameter is required")
+            return "Error: query parameter is required"
         
         try:
-            # Run async search in sync context
-            results = asyncio.run(self.memory_manager.search(
+            results = await self.memory_manager.search(
                 query=query,
                 user_id=self.user_id,
                 max_results=max_results,
                 min_score=min_score,
                 include_shared=True
-            ))
+            )
             
             if not results:
-                return ToolResult.success(f"No relevant memories found for query: {query}")
+                return f"No relevant memories found for query: {query}"
             
             # Format results
             output = [f"Found {len(results)} relevant memories:\n"]
@@ -90,7 +94,7 @@ class MemorySearchTool(BaseTool):
                 output.append(f"   Score: {result.score:.3f}")
                 output.append(f"   Snippet: {result.snippet}")
             
-            return ToolResult.success("\n".join(output))
+            return "\n".join(output)
             
         except Exception as e:
-            return ToolResult.fail(f"Error searching memory: {str(e)}")
+            return f"Error searching memory: {str(e)}"

@@ -13,50 +13,41 @@ from agentmesh.memory.manager import MemoryManager
 class MemoryGetTool(BaseTool):
     """Tool for reading memory file contents"""
     
-    def __init__(self, memory_manager: MemoryManager):
+    # Use class attributes instead of instance attributes
+    name: str = "memory_get"
+    description: str = (
+        "Read specific memory file content by path and line range. "
+        "Use after memory_search to get full context from historical memory files."
+    )
+    params: dict = {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Relative path to the memory file (e.g., 'MEMORY.md', 'memory/2024-01-29.md')"
+            },
+            "start_line": {
+                "type": "integer",
+                "description": "Starting line number (optional, default: 1)",
+                "default": 1
+            },
+            "num_lines": {
+                "type": "integer",
+                "description": "Number of lines to read (optional, reads all if not specified)"
+            }
+        },
+        "required": ["path"]
+    }
+    
+    def __init__(self, memory_manager: Optional[MemoryManager] = None):
         """
         Initialize memory get tool
         
         Args:
-            memory_manager: MemoryManager instance
+            memory_manager: MemoryManager instance (optional, required for actual execution)
         """
         super().__init__()
         self.memory_manager = memory_manager
-        self._name = "memory_get"
-        self._description = (
-            "Read specific memory file content by path and line range. "
-            "Use after memory_search to get full context from historical memory files."
-        )
-    
-    @property
-    def name(self) -> str:
-        return self._name
-    
-    @property
-    def description(self) -> str:
-        return self._description
-    
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Relative path to the memory file (e.g., 'MEMORY.md', 'memory/2024-01-29.md')"
-                },
-                "start_line": {
-                    "type": "integer",
-                    "description": "Starting line number (optional, default: 1)",
-                    "default": 1
-                },
-                "num_lines": {
-                    "type": "integer",
-                    "description": "Number of lines to read (optional, reads all if not specified)"
-                }
-            },
-            "required": ["path"]
-        }
     
     async def execute(self, **kwargs) -> str:
         """
@@ -70,6 +61,9 @@ class MemoryGetTool(BaseTool):
         Returns:
             File content
         """
+        if self.memory_manager is None:
+            return "Error: Memory manager not configured. This tool requires a MemoryManager instance."
+        
         path = kwargs.get("path")
         start_line = kwargs.get("start_line", 1)
         num_lines = kwargs.get("num_lines")
