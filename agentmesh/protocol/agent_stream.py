@@ -88,6 +88,11 @@ class AgentStreamExecutor:
 
         final_response = ""
         turn = 0
+        
+        # Safety check: ensure max_turns is valid
+        if self.max_turns is None:
+            logger.warning("max_turns is None, using default value 10")
+            self.max_turns = 10
 
         try:
             while turn < self.max_turns:
@@ -159,7 +164,9 @@ class AgentStreamExecutor:
                 logger.warning(f"Reached max turns: {self.max_turns}")
 
         except Exception as e:
+            import traceback
             logger.error(f"Agent execution error: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             self._emit_event("error", {"error": str(e)})
             raise
 
