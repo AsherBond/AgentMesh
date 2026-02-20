@@ -127,7 +127,37 @@ Use the AgentMesh SDK to build custom agent teams programmatically:
 pip install agentmesh-sdk
 ```
 
-Example usage (replace `YOUR_API_KEY` with your actual API key):
+#### 3.1 Single Agent
+
+Run a single super-agent directly without a team, with multi-turn conversation support:
+
+```python
+from agentmesh import Agent, LLMModel
+from agentmesh.tools import *
+
+# Initialize model
+model = LLMModel(model="gpt-4.1", api_key="YOUR_API_KEY")
+
+# Create a single agent with tools
+agent = Agent(
+    name="Assistant",
+    description="A versatile assistant",
+    system_prompt="You are a helpful assistant who answers questions using available tools.",
+    model=model,
+    tools=[GoogleSearch(), Calculator()]
+)
+
+# Single-turn call
+response = agent.run_stream("What are the latest trends in multi-agent AI?")
+
+# Multi-turn conversation (history is retained automatically)
+agent.run_stream("My project is named AgentMesh")
+agent.run_stream("Write a brief intro for my project")  # Remembers the project name
+```
+
+#### 3.2 Agent Team
+
+Build a multi-agent team where agents collaborate on complex tasks (replace `YOUR_API_KEY` with your actual API key):
 
 ```python
 from agentmesh import AgentTeam, Agent, LLMModel

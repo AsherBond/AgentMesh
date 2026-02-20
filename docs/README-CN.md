@@ -124,7 +124,37 @@ python main.py -t general_team                  # 指定一个team后开始多�
 pip install agentmesh-sdk
 ```
 
-以下是一个简单的使用示例，使用前请替换 `YOUR_API_KEY` 为你的实际API密钥：
+#### 3.1 单智能体
+
+直接运行单个超级智能体，支持多轮对话：
+
+```python
+from agentmesh import Agent, LLMModel
+from agentmesh.tools import *
+
+# 初始化模型
+model = LLMModel(model="gpt-4.1", api_key="YOUR_API_KEY")
+
+# 创建单个智能体并配置工具
+agent = Agent(
+    name="Assistant",
+    description="通用助手",
+    system_prompt="你是一个善于使用工具解决问题的助手。",
+    model=model,
+    tools=[GoogleSearch(), Calculator()]
+)
+
+# 单次调用
+response = agent.run_stream("帮我分析多智能体技术的最新发展趋势")
+
+# 多轮对话（自动保留上下文）
+agent.run_stream("我的项目名称是 AgentMesh")
+agent.run_stream("帮我为这个项目写一段简介")
+```
+
+#### 3.2 多智能体团队
+
+构建多智能体团队，通过协作完成复杂任务，使用前请替换 `YOUR_API_KEY` 为你的实际API密钥：
 
 ```python
 from agentmesh import AgentTeam, Agent, LLMModel
